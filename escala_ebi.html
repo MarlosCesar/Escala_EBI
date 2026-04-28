@@ -1066,10 +1066,11 @@
 
             list.sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
-            list.forEach((name, idx) => {
+            list.forEach((name) => {
+                const escapedName = name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 const li = document.createElement('li');
                 li.className = 'teacher-chip';
-                li.innerHTML = `<span class="teacher-name">${name}</span><span class="teacher-actions"><button class="teacher-edit" title="Editar" onclick="editTeacherInline(${idx})">✏️</button><button class="teacher-remove" title="Remover" onclick="removeTeacherInline(${idx})">&times;</button></span>`;
+                li.innerHTML = `<span class="teacher-name">${name}</span><span class="teacher-actions"><button class="teacher-edit" title="Editar" onclick="editTeacherInline('${escapedName}')">✏️</button><button class="teacher-remove" title="Remover" onclick="removeTeacherInline('${escapedName}')">&times;</button></span>`;
                 container.appendChild(li);
             });
         }
@@ -1093,23 +1094,29 @@
             showToast(`"${name}" adicionado ao banco!`, 'success');
         }
 
-        // Remove a teacher by index
-        function removeTeacherInline(idx) {
+        // Remove a teacher by name
+        function removeTeacherInline(name) {
             const list = getTeacherList();
-            const removed = list.splice(idx, 1);
-            saveTeacherList(list);
-            renderTeacherPanel();
-            showToast(`"${removed[0]}" removido do banco.`, 'success');
+            const idx = list.indexOf(name);
+            if (idx > -1) {
+                list.splice(idx, 1);
+                saveTeacherList(list);
+                renderTeacherPanel();
+                showToast(`"${name}" removido do banco.`, 'success');
+            }
         }
 
-        // Edit a teacher name by index
-        function editTeacherInline(idx) {
+        // Edit a teacher name
+        function editTeacherInline(oldName) {
             const list = getTeacherList();
-            const oldName = list[idx];
+            const idx = list.indexOf(oldName);
+            if (idx === -1) return;
+            
             const newName = prompt('Editar nome do professor:', oldName);
             if (newName === null || newName.trim() === '') return;
             const trimmed = newName.trim();
             if (trimmed === oldName) return;
+            
             if (list.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
                 showToast('Já existe um professor com esse nome.', 'error');
                 return;
