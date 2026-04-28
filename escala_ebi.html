@@ -707,29 +707,11 @@
                 display: block !important;
             }
 
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                border: 1px solid #000;
-            }
-
-            th,
-            td {
-                border: 1px solid #000 !important;
-                padding: 6px;
-            }
-
-            th {
-                background-color: #2c3e50 !important;
-                color: white !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-
-            .age-group {
-                background-color: #ecf0f1 !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
+            /* Retain inline styles exactly as they are */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
             }
         }
     </style>
