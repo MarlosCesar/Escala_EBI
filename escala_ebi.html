@@ -709,7 +709,7 @@
 
             @page {
                 size: landscape;
-                margin: 10mm;
+                margin: 5mm;
             }
 
             #capture-area {
@@ -719,7 +719,10 @@
             #capture-area > div {
                 min-width: 0 !important;
                 width: 100% !important;
-                padding: 15px !important;
+                padding: 5px !important;
+                box-sizing: border-box !important;
+                page-break-inside: avoid;
+                break-inside: avoid;
             }
 
             /* Retain inline styles exactly as they are */
