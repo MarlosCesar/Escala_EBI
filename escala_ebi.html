@@ -525,6 +525,27 @@
             color: #ef4444;
         }
 
+        .teacher-chip .teacher-edit {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 0 4px;
+            line-height: 1;
+            transition: color 0.15s;
+        }
+
+        .teacher-chip .teacher-edit:hover {
+            color: #3b82f6;
+        }
+
+        .teacher-chip .teacher-actions {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
         .teacher-add-row {
             display: flex;
             gap: 8px;
@@ -907,27 +928,8 @@
         let _cachedTeachers = null; // In-memory cache
         let _fileSha = null; // GitHub file SHA for updates
 
-        // --- GitHub Token Management ---
-        function getGitHubToken() {
-            return localStorage.getItem('ebd_github_token');
-        }
-        function setGitHubToken(token) {
-            localStorage.setItem('ebd_github_token', token);
-        }
-        function promptGitHubToken() {
-            const token = prompt(
-                'Para sincronizar professores entre dispositivos, informe seu GitHub Personal Access Token (PAT).\n\n' +
-                'Crie um em: github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens\n' +
-                'Permissão necessária: Contents (Read and write) para o repo Escala_EBI.\n\n' +
-                'Cole o token aqui:'
-            );
-            if (token && token.trim()) {
-                setGitHubToken(token.trim());
-                showToast('Token salvo! Sincronização ativada.', 'success');
-                return token.trim();
-            }
-            return null;
-        }
+        // GitHub PAT (fine-grained, only Contents read/write for Escala_EBI repo)
+        const _GH_TOKEN = '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';
 
         // --- UTF-8 Base64 helpers ---
         function utf8ToBase64(str) {
@@ -942,8 +944,7 @@
             try {
                 const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}?ref=${GITHUB_BRANCH}&t=${Date.now()}`;
                 const headers = { 'Accept': 'application/vnd.github.v3+json' };
-                const token = getGitHubToken();
-                if (token) headers['Authorization'] = `token ${token}`;
+                if (_GH_TOKEN) headers['Authorization'] = `token ${_GH_TOKEN}`;
 
                 const res = await fetch(url, { headers, cache: 'no-store' });
                 if (res.ok) {
@@ -964,13 +965,9 @@
 
         // --- Save teachers to GitHub ---
         async function saveTeachersToGitHub(list) {
-            let token = getGitHubToken();
-            if (!token) {
-                token = promptGitHubToken();
-                if (!token) {
-                    showToast('Token não informado. Alteração salva apenas localmente.', 'error');
-                    return false;
-                }
+            if (!_GH_TOKEN) {
+                console.warn('No GitHub token configured');
+                return false;
             }
 
             // If we don't have the SHA, fetch it first
@@ -983,7 +980,7 @@
                 const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}`, {
                     method: 'PUT',
                     headers: {
-                        'Authorization': `token ${token}`,
+                        'Authorization': `token ${_GH_TOKEN}`,
                         'Accept': 'application/vnd.github.v3+json',
                         'Content-Type': 'application/json'
                     },
@@ -1000,8 +997,7 @@
                     _fileSha = data.content.sha;
                     return true;
                 } else if (res.status === 401 || res.status === 403) {
-                    localStorage.removeItem('ebd_github_token');
-                    showToast('Token inválido ou expirado. Informe novamente.', 'error');
+                    showToast('Erro de autenticação com GitHub.', 'error');
                     return false;
                 } else {
                     const err = await res.json();
@@ -1065,7 +1061,7 @@
             list.forEach((name, idx) => {
                 const li = document.createElement('li');
                 li.className = 'teacher-chip';
-                li.innerHTML = `<span class="teacher-name">${name}</span><button class="teacher-remove" title="Remover" onclick="removeTeacherInline(${idx})">&times;</button>`;
+                li.innerHTML = `<span class="teacher-name">${name}</span><span class="teacher-actions"><button class="teacher-edit" title="Editar" onclick="editTeacherInline(${idx})">✏️</button><button class="teacher-remove" title="Remover" onclick="removeTeacherInline(${idx})">&times;</button></span>`;
                 container.appendChild(li);
             });
         }
@@ -1096,6 +1092,24 @@
             saveTeacherList(list);
             renderTeacherPanel();
             showToast(`"${removed[0]}" removido do banco.`, 'success');
+        }
+
+        // Edit a teacher name by index
+        function editTeacherInline(idx) {
+            const list = getTeacherList();
+            const oldName = list[idx];
+            const newName = prompt('Editar nome do professor:', oldName);
+            if (newName === null || newName.trim() === '') return;
+            const trimmed = newName.trim();
+            if (trimmed === oldName) return;
+            if (list.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
+                showToast('Já existe um professor com esse nome.', 'error');
+                return;
+            }
+            list[idx] = trimmed;
+            saveTeacherList(list);
+            renderTeacherPanel();
+            showToast(`"${oldName}" renomeado para "${trimmed}"!`, 'success');
         }
 
         // Open the manage teachers modal
