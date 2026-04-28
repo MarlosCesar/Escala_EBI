@@ -593,6 +593,17 @@
             box-shadow: 0 4px 8px rgba(139, 92, 246, 0.3);
         }
 
+        @media (max-width: 480px) {
+            .teacher-add-row button .add-text {
+                display: none;
+            }
+            .teacher-add-row button {
+                padding: 9px 16px;
+                font-size: 16px;
+                font-weight: 700;
+            }
+        }
+
         .teacher-panel-footer {
             display: flex;
             justify-content: flex-end;
@@ -846,13 +857,15 @@
                 <span class="close-modal" onclick="closeManageTeachers()">&times;</span>
             </div>
             <div style="padding: 20px; display: flex; flex-direction: column; flex-grow: 1;">
-                <p class="teacher-panel-hint">Adicione ou remova professores. A lista padrão está sempre disponível em qualquer máquina.</p>
+                <p class="teacher-panel-hint">Adicione ou remova professores. A lista padrão está sempre disponível em
+                    qualquer máquina.</p>
                 <ul class="teacher-list-inline" id="teacherListInline">
                     <!-- Rendered by JS -->
                 </ul>
                 <div class="teacher-add-row">
-                    <input type="text" id="newTeacherInput" placeholder="Nome do professor..." onkeydown="if(event.key==='Enter'){event.preventDefault();addTeacherInline()}">
-                    <button type="button" onclick="addTeacherInline()">+ Adicionar</button>
+                    <input type="text" id="newTeacherInput" placeholder="Nome do professor..."
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();addTeacherInline()}">
+                    <button type="button" onclick="addTeacherInline()">+ <span class="add-text">Adicionar</span></button>
                 </div>
                 <div class="teacher-panel-footer">
                     <button type="button" onclick="resetTeachersToDefault()">↺ Restaurar padrão</button>
@@ -1031,7 +1044,7 @@
                         _cachedTeachers = parsed;
                         return [...parsed];
                     }
-                } catch(e) {
+                } catch (e) {
                     const names = saved.split(/\n|,/g).map(t => t.trim()).filter(t => t !== '');
                     if (names.length > 0) {
                         _cachedTeachers = names;
@@ -1111,12 +1124,12 @@
             const list = getTeacherList();
             const idx = list.indexOf(oldName);
             if (idx === -1) return;
-            
+
             const newName = prompt('Editar nome do professor:', oldName);
             if (newName === null || newName.trim() === '') return;
             const trimmed = newName.trim();
             if (trimmed === oldName) return;
-            
+
             if (list.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
                 showToast('Já existe um professor com esse nome.', 'error');
                 return;
