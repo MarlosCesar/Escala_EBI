@@ -707,6 +707,21 @@
                 display: block !important;
             }
 
+            @page {
+                size: landscape;
+                margin: 10mm;
+            }
+
+            #capture-area {
+                overflow: visible !important;
+            }
+
+            #capture-area > div {
+                min-width: 0 !important;
+                width: 100% !important;
+                padding: 15px !important;
+            }
+
             /* Retain inline styles exactly as they are */
             * {
                 -webkit-print-color-adjust: exact !important;
