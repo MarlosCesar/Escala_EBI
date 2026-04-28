@@ -894,40 +894,161 @@
             }
         }
 
-        // ===== Teacher Bank Logic (Inline Panel) =====
-        // Default teacher list — hardcoded so it's always available on any machine
+        // ===== Teacher Bank Logic (GitHub-backed) =====
+        const GITHUB_REPO = 'MarlosCesar/Escala_EBI';
+        const GITHUB_FILE = 'teachers.json';
+        const GITHUB_BRANCH = 'main';
         const DEFAULT_TEACHERS = [
             '-', 'Shirley', 'Cláudia', 'Veronica', 'Rubenita', 'Mônica',
             'Bete', 'Léa', 'Luana', 'Marcio', 'Thiago', 'Margarete', 'Marlos'
         ];
 
         let activeInputForTeacher = null;
+        let _cachedTeachers = null; // In-memory cache
+        let _fileSha = null; // GitHub file SHA for updates
 
-        // Get the current teacher list (localStorage override or defaults)
+        // --- GitHub Token Management ---
+        function getGitHubToken() {
+            return localStorage.getItem('ebd_github_token');
+        }
+        function setGitHubToken(token) {
+            localStorage.setItem('ebd_github_token', token);
+        }
+        function promptGitHubToken() {
+            const token = prompt(
+                'Para sincronizar professores entre dispositivos, informe seu GitHub Personal Access Token (PAT).\n\n' +
+                'Crie um em: github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens\n' +
+                'Permissão necessária: Contents (Read and write) para o repo Escala_EBI.\n\n' +
+                'Cole o token aqui:'
+            );
+            if (token && token.trim()) {
+                setGitHubToken(token.trim());
+                showToast('Token salvo! Sincronização ativada.', 'success');
+                return token.trim();
+            }
+            return null;
+        }
+
+        // --- UTF-8 Base64 helpers ---
+        function utf8ToBase64(str) {
+            return btoa(unescape(encodeURIComponent(str)));
+        }
+        function base64ToUtf8(str) {
+            return decodeURIComponent(escape(atob(str)));
+        }
+
+        // --- Fetch teachers from GitHub ---
+        async function fetchTeachersFromGitHub() {
+            try {
+                const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}?ref=${GITHUB_BRANCH}&t=${Date.now()}`;
+                const headers = { 'Accept': 'application/vnd.github.v3+json' };
+                const token = getGitHubToken();
+                if (token) headers['Authorization'] = `token ${token}`;
+
+                const res = await fetch(url, { headers, cache: 'no-store' });
+                if (res.ok) {
+                    const data = await res.json();
+                    _fileSha = data.sha;
+                    const content = JSON.parse(base64ToUtf8(data.content));
+                    if (Array.isArray(content) && content.length > 0) {
+                        _cachedTeachers = content;
+                        localStorage.setItem('ebd_teachers', JSON.stringify(content));
+                        return content;
+                    }
+                }
+            } catch (e) {
+                console.warn('GitHub fetch failed, using local cache:', e);
+            }
+            return null;
+        }
+
+        // --- Save teachers to GitHub ---
+        async function saveTeachersToGitHub(list) {
+            let token = getGitHubToken();
+            if (!token) {
+                token = promptGitHubToken();
+                if (!token) {
+                    showToast('Token não informado. Alteração salva apenas localmente.', 'error');
+                    return false;
+                }
+            }
+
+            // If we don't have the SHA, fetch it first
+            if (!_fileSha) {
+                await fetchTeachersFromGitHub();
+            }
+
+            try {
+                const content = utf8ToBase64(JSON.stringify(list, null, 2));
+                const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: 'Atualizar lista de professores',
+                        content: content,
+                        sha: _fileSha,
+                        branch: GITHUB_BRANCH
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    _fileSha = data.content.sha;
+                    return true;
+                } else if (res.status === 401 || res.status === 403) {
+                    localStorage.removeItem('ebd_github_token');
+                    showToast('Token inválido ou expirado. Informe novamente.', 'error');
+                    return false;
+                } else {
+                    const err = await res.json();
+                    console.error('GitHub save error:', err);
+                    showToast('Erro ao salvar no GitHub. Tente novamente.', 'error');
+                    return false;
+                }
+            } catch (e) {
+                console.error('GitHub save failed:', e);
+                showToast('Erro de conexão com GitHub.', 'error');
+                return false;
+            }
+        }
+
+        // --- Get teacher list (from cache/localStorage/defaults) ---
         function getTeacherList() {
+            if (_cachedTeachers && _cachedTeachers.length > 0) return [..._cachedTeachers];
             const saved = localStorage.getItem('ebd_teachers');
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
-                    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        _cachedTeachers = parsed;
+                        return [...parsed];
+                    }
                 } catch(e) {
-                    // Migrate from old format (newline-separated string)
                     const names = saved.split(/\n|,/g).map(t => t.trim()).filter(t => t !== '');
                     if (names.length > 0) {
+                        _cachedTeachers = names;
                         localStorage.setItem('ebd_teachers', JSON.stringify(names));
-                        return names;
+                        return [...names];
                     }
                 }
             }
+            _cachedTeachers = [...DEFAULT_TEACHERS];
             return [...DEFAULT_TEACHERS];
         }
 
-        // Save teacher list to localStorage
+        // --- Save teacher list (local + GitHub) ---
         function saveTeacherList(list) {
+            _cachedTeachers = [...list];
             localStorage.setItem('ebd_teachers', JSON.stringify(list));
+            // Sync to GitHub in background
+            saveTeachersToGitHub(list);
         }
 
-        // Render the inline teacher panel
+        // Render the teacher panel inside the modal
         function renderTeacherPanel() {
             const list = getTeacherList();
             const container = document.getElementById('teacherListInline');
@@ -949,14 +1070,13 @@
             });
         }
 
-        // Add a teacher via the inline input
+        // Add a teacher
         function addTeacherInline() {
             const input = document.getElementById('newTeacherInput');
             const name = input.value.trim();
             if (!name) return;
 
             const list = getTeacherList();
-            // Check for duplicates (case-insensitive)
             if (list.some(t => t.toLowerCase() === name.toLowerCase())) {
                 showToast('Este professor já está na lista.', 'error');
                 return;
@@ -979,7 +1099,10 @@
         }
 
         // Open the manage teachers modal
-        function openManageTeachers() {
+        async function openManageTeachers() {
+            // Sync from GitHub before showing
+            showToast('Sincronizando com GitHub...', 'default');
+            await fetchTeachersFromGitHub();
             renderTeacherPanel();
             document.getElementById('manageTeachersModal').style.display = 'flex';
         }
@@ -991,8 +1114,8 @@
 
         // Reset to hardcoded defaults
         function resetTeachersToDefault() {
-            if (!confirm('Restaurar a lista padrão de professores? Alterações locais serão perdidas.')) return;
-            localStorage.removeItem('ebd_teachers');
+            if (!confirm('Restaurar a lista padrão de professores? Alterações serão sincronizadas com GitHub.')) return;
+            saveTeacherList([...DEFAULT_TEACHERS]);
             renderTeacherPanel();
             showToast('Lista restaurada ao padrão!', 'success');
         }
@@ -1128,7 +1251,13 @@
 
             // Attempt load data
             loadDraft();
-            renderTeacherPanel(); // Render the always-visible teacher list
+
+            // Fetch teacher list from GitHub in background (sync across devices)
+            fetchTeachersFromGitHub().then(() => {
+                console.log('Teachers synced from GitHub');
+            }).catch(e => {
+                console.warn('GitHub sync failed on load:', e);
+            });
 
             // Bind auto-save & Double Click
             const inputs = document.querySelectorAll('input, textarea, select');
