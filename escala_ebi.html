@@ -963,6 +963,7 @@
         // ===== Teacher Bank Logic (GitHub-backed) =====
         const GITHUB_REPO = 'MarlosCesar/Escala_EBI';
         const GITHUB_FILE = 'teachers.json';
+        const GITHUB_HISTORY_FILE = 'history.json';
         const GITHUB_BRANCH = 'main';
         const DEFAULT_TEACHERS = [
             '-', 'Shirley', 'Cláudia', 'Veronica', 'Rubenita', 'Mônica',
@@ -972,6 +973,7 @@
         let activeInputForTeacher = null;
         let _cachedTeachers = null; // In-memory cache
         let _fileSha = null; // GitHub file SHA for updates
+        let _historyFileSha = null; // GitHub file SHA for history updates
 
         // GitHub PAT (fine-grained, only Contents read/write for Escala_EBI repo)
         // Token is split to prevent GitHub automated token scanner from instantly revoking it
@@ -1054,6 +1056,88 @@
             } catch (e) {
                 console.error('GitHub save failed:', e);
                 showToast('Erro de conexão com GitHub.', 'error');
+                return false;
+            }
+        }
+
+        // --- Fetch history from GitHub ---
+        async function fetchHistoryFromGitHub() {
+            try {
+                const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_HISTORY_FILE}?ref=${GITHUB_BRANCH}&t=${Date.now()}`;
+                const headers = { 'Accept': 'application/vnd.github.v3+json' };
+                if (_GH_TOKEN) headers['Authorization'] = `token ${_GH_TOKEN}`;
+
+                const res = await fetch(url, { headers, cache: 'no-store' });
+                if (res.ok) {
+                    const data = await res.json();
+                    _historyFileSha = data.sha;
+                    const content = JSON.parse(base64ToUtf8(data.content));
+                    if (Array.isArray(content)) {
+                        // Merge local and remote
+                        let localHistory = JSON.parse(localStorage.getItem('ebi_schedules_history') || '[]');
+                        let merged = [...content, ...localHistory];
+                        // Deduplicate by ID
+                        let unique = [];
+                        let ids = new Set();
+                        for (let item of merged) {
+                            if (!ids.has(item.id)) {
+                                unique.push(item);
+                                ids.add(item.id);
+                            }
+                        }
+                        // Sort by date descending (assuming id is timestamp)
+                        unique.sort((a, b) => parseInt(b.id) - parseInt(a.id));
+                        if (unique.length > 30) unique = unique.slice(0, 30);
+                        
+                        localStorage.setItem('ebi_schedules_history', JSON.stringify(unique));
+                        return unique;
+                    }
+                }
+            } catch (e) {
+                console.warn('GitHub history fetch failed, using local cache:', e);
+            }
+            return null;
+        }
+
+        // --- Save history to GitHub ---
+        async function saveHistoryToGitHub(list) {
+            if (!_GH_TOKEN) return false;
+
+            if (!_historyFileSha) {
+                await fetchHistoryFromGitHub();
+            }
+
+            try {
+                const content = utf8ToBase64(JSON.stringify(list, null, 2));
+                const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_HISTORY_FILE}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${_GH_TOKEN}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: 'Atualizar historico de escalas',
+                        content: content,
+                        sha: _historyFileSha,
+                        branch: GITHUB_BRANCH
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    _historyFileSha = data.content.sha;
+                    return true;
+                } else if (res.status === 401 || res.status === 403) {
+                    console.warn('Erro de autenticação com GitHub para histórico.');
+                    return false;
+                } else {
+                    const err = await res.json();
+                    console.error('GitHub save history error:', err);
+                    return false;
+                }
+            } catch (e) {
+                console.error('GitHub save history failed:', e);
                 return false;
             }
         }
@@ -1323,6 +1407,7 @@
             // Keep last 30
             if (history.length > 30) history = history.slice(0, 30);
             localStorage.setItem('ebi_schedules_history', JSON.stringify(history));
+            saveHistoryToGitHub(history);
         }
 
         function openHistoryModal() {
@@ -1399,6 +1484,7 @@
                 let history = JSON.parse(localStorage.getItem('ebi_schedules_history') || '[]');
                 history = history.filter(i => i.id !== id);
                 localStorage.setItem('ebi_schedules_history', JSON.stringify(history));
+                saveHistoryToGitHub(history);
                 renderHistory();
             }
         }
@@ -1417,6 +1503,13 @@
                 console.log('Teachers synced from GitHub');
             }).catch(e => {
                 console.warn('GitHub sync failed on load:', e);
+            });
+
+            // Fetch history from GitHub in background
+            fetchHistoryFromGitHub().then(() => {
+                console.log('History synced from GitHub');
+            }).catch(e => {
+                console.warn('GitHub history sync failed on load:', e);
             });
 
             // Bind auto-save & Double Click
