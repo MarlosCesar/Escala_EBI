@@ -161,6 +161,28 @@
             resize: vertical;
         }
 
+        .label-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .clear-btn {
+            cursor: pointer; 
+            color: #ef4444; 
+            font-size: 12px; 
+            font-weight: 600;
+            user-select: none;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .clear-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
         /* Generate Button Container */
         .btn-container {
             text-align: center;
@@ -191,6 +213,32 @@
         }
 
         .btn-generate:active {
+            transform: translateY(0);
+        }
+
+        .btn-clear {
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-clear:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4);
+            background-color: #dc2626;
+        }
+        
+        .btn-clear:active {
             transform: translateY(0);
         }
 
@@ -794,29 +842,45 @@
 
                     <div class="grid-classes">
                         <div class="form-group">
-                            <label for="bercario_manha">Berçário (Manhã):</label>
+                            <label for="bercario_manha" class="label-flex">
+                                <span>Berçário (Manhã):</span>
+                                <span class="clear-btn" onclick="document.getElementById('bercario_manha').value=''; saveDraft();">Limpar</span>
+                            </label>
                             <textarea id="bercario_manha" placeholder="Ex: Shirley"></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="bercario_noite">Berçário (Noite):</label>
+                            <label for="bercario_noite" class="label-flex">
+                                <span>Berçário (Noite):</span>
+                                <span class="clear-btn" onclick="document.getElementById('bercario_noite').value=''; saveDraft();">Limpar</span>
+                            </label>
                             <textarea id="bercario_noite" placeholder="Ex: Cláudia"></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="jardim">Jardim:</label>
+                            <label for="jardim" class="label-flex">
+                                <span>Jardim:</span>
+                                <span class="clear-btn" onclick="document.getElementById('jardim').value=''; saveDraft();">Limpar</span>
+                            </label>
                             <textarea id="jardim" placeholder="Ex: Verônica"></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="juniores">Juniores:</label>
+                            <label for="juniores" class="label-flex">
+                                <span>Juniores:</span>
+                                <span class="clear-btn" onclick="document.getElementById('juniores').value=''; saveDraft();">Limpar</span>
+                            </label>
                             <textarea id="juniores" placeholder="Ex: Léa"></textarea>
                         </div>
                         <div class="form-group" style="grid-column: 1 / -1;">
-                            <label for="adolescentes">Adolescentes:</label>
+                            <label for="adolescentes" class="label-flex">
+                                <span>Adolescentes:</span>
+                                <span class="clear-btn" onclick="document.getElementById('adolescentes').value=''; saveDraft();">Limpar</span>
+                            </label>
                             <textarea id="adolescentes" placeholder="Ex: Thiago" style="min-height: 80px;"></textarea>
                         </div>
                     </div>
 
-                    <div class="btn-container">
-                        <button type="submit" class="btn btn-generate">Gerar Escala ✨</button>
+                    <div class="btn-container" style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
+                        <button type="button" class="btn-clear" onclick="limparTudo()">🗑️ Limpar Tudo</button>
+                        <button type="submit" class="btn-generate">Gerar Escala ✨</button>
                     </div>
                 </form>
             </div>
@@ -1537,6 +1601,18 @@
 
             document.getElementById('result-panel').style.display = 'none';
             document.querySelector('footer').style.display = 'block';
+        }
+
+        function limparTudo() {
+            if(confirm('Tem certeza que deseja limpar todos os professores selecionados?')) {
+                document.getElementById('bercario_manha').value = '';
+                document.getElementById('bercario_noite').value = '';
+                document.getElementById('jardim').value = '';
+                document.getElementById('juniores').value = '';
+                document.getElementById('adolescentes').value = '';
+                saveDraft();
+                showToast('Campos limpos com sucesso!', 'success');
+            }
         }
 
         function getSundays(month, year) {
