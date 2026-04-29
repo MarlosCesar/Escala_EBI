@@ -747,9 +747,14 @@
                 <div class="subtitle">Sistema de Geração de Escalas Mensais</div>
             </div>
 
-            <button onclick="openManageTeachers()" class="header-btn">
-                <span>👩‍🏫</span> Gerenciar Professores
-            </button>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="openHistoryModal()" class="header-btn" style="background: rgba(255,255,255,0.15);">
+                    <span>📅</span> Escalas
+                </button>
+                <button onclick="openManageTeachers()" class="header-btn">
+                    <span>👩‍🏫</span> Professores
+                </button>
+            </div>
         </header>
 
         <div class="content">
@@ -829,6 +834,22 @@
         <footer>
             <p>Sistema de Geração de Escalas - Escola Bíblica Infantil &copy; <span id="footer-year"></span></p>
         </footer>
+    </div>
+
+    <!-- History Modal -->
+    <div id="historyModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>Escalas Geradas</h3>
+                <span class="close-modal" onclick="closeHistoryModal()">&times;</span>
+            </div>
+            <div style="padding: 20px; display: flex; flex-direction: column; flex-grow: 1;">
+                <p class="teacher-panel-hint">Aqui ficam as escalas passadas salvas neste dispositivo.</p>
+                <div id="historyListContainer" style="display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 60vh;">
+                    <!-- Rendered by JS -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Teacher Selector Modal -->
@@ -1277,13 +1298,106 @@
         window.onclick = function (event) {
             const modal = document.getElementById('teacherModal');
             const manageModal = document.getElementById('manageTeachersModal');
-            if (modal && event.target == modal) {
-                closeTeacherModal();
+            const historyModal = document.getElementById('historyModal');
+            if (modal && event.target == modal) closeTeacherModal();
+            if (manageModal && event.target == manageModal) closeManageTeachers();
+            if (historyModal && event.target == historyModal) closeHistoryModal();
+        }
+
+        // --- History Logic ---
+        function saveToHistory(data) {
+            let history = JSON.parse(localStorage.getItem('ebi_schedules_history') || '[]');
+            // Create a unique id for this save
+            const id = Date.now().toString();
+            const dateStr = new Date().toLocaleString('pt-BR');
+            history.unshift({
+                id,
+                data, // contains monthIndex, year, textData
+                date: dateStr
+            });
+            // Keep last 30
+            if (history.length > 30) history = history.slice(0, 30);
+            localStorage.setItem('ebi_schedules_history', JSON.stringify(history));
+        }
+
+        function openHistoryModal() {
+            renderHistory();
+            document.getElementById('historyModal').style.display = 'flex';
+        }
+
+        function closeHistoryModal() {
+            document.getElementById('historyModal').style.display = 'none';
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('historyListContainer');
+            const history = JSON.parse(localStorage.getItem('ebi_schedules_history') || '[]');
+            
+            if (history.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma escala salva ainda. (Gere e copie uma escala para salvar aqui)</div>';
+                return;
             }
-            if (manageModal && event.target == manageModal) {
-                closeManageTeachers();
+
+            const monthNames = [
+                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ];
+
+            container.innerHTML = history.map(item => `
+                <div style="border: 1px solid #bdc3c7; border-radius: 8px; padding: 15px; display: flex; justify-content: space-between; align-items: center; background: #f9fbfb;">
+                    <div>
+                        <div style="font-weight: 700; color: #2c3e50; font-size: 16px;">Escala de ${monthNames[item.data.monthIndex]} ${item.data.year}</div>
+                        <div style="font-size: 12px; color: #7f8c8d; margin-top: 4px;">Cópia feita em: ${item.date}</div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="loadHistoryItem('${item.id}')" style="background: #27ae60; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 5px;" title="Carregar e Copiar">
+                            <span>📱</span> Abrir & Copiar
+                        </button>
+                        <button onclick="deleteHistoryItem('${item.id}')" style="background: #e74c3c; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;" title="Excluir">
+                            &times;
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function loadHistoryItem(id) {
+            const history = JSON.parse(localStorage.getItem('ebi_schedules_history') || '[]');
+            const item = history.find(i => i.id === id);
+            if (item && item.data) {
+                document.getElementById('month').value = item.data.monthIndex;
+                document.getElementById('year').value = item.data.year;
+                document.getElementById('bercario_manha').value = item.data.textData.bercario_manha;
+                document.getElementById('bercario_noite').value = item.data.textData.bercario_noite;
+                document.getElementById('jardim').value = item.data.textData.jardim;
+                document.getElementById('juniores').value = item.data.textData.juniores;
+                document.getElementById('adolescentes').value = item.data.textData.adolescentes;
+                
+                closeHistoryModal();
+                showToast("Escala carregada! Copiando...", "success");
+                
+                // Save draft so we don't lose the state on refresh
+                saveDraft();
+                
+                // Generate UI
+                generateSchedule();
+
+                // Trigger copy automatically
+                setTimeout(() => {
+                    copyToClipboard();
+                }, 300);
             }
         }
+
+        function deleteHistoryItem(id) {
+            if(confirm('Tem certeza que deseja excluir esta escala do histórico?')) {
+                let history = JSON.parse(localStorage.getItem('ebi_schedules_history') || '[]');
+                history = history.filter(i => i.id !== id);
+                localStorage.setItem('ebi_schedules_history', JSON.stringify(history));
+                renderHistory();
+            }
+        }
+
 
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('footer-year').textContent = new Date().getFullYear();
@@ -1389,6 +1503,19 @@
                 jardim: parseNames(document.getElementById('jardim').value, sundays.length),
                 juniores: parseNames(document.getElementById('juniores').value, sundays.length),
                 adolescentes: parseNames(document.getElementById('adolescentes').value, sundays.length),
+            };
+
+            // Save globally for history saving
+            window.lastScheduleData = {
+                monthIndex,
+                year,
+                textData: {
+                    bercario_manha: document.getElementById('bercario_manha').value,
+                    bercario_noite: document.getElementById('bercario_noite').value,
+                    jardim: document.getElementById('jardim').value,
+                    juniores: document.getElementById('juniores').value,
+                    adolescentes: document.getElementById('adolescentes').value
+                }
             };
 
             // Use embedded base64 logo (loaded from logo_data.js)
@@ -1635,6 +1762,25 @@
                         const item = new ClipboardItem({ "image/png": blob });
                         navigator.clipboard.write([item]).then(() => {
                             showToast("Copiado com sucesso! ✅", 'success');
+                            
+                            // Save to history automatically
+                            if (typeof window.lastScheduleData !== 'undefined' && window.lastScheduleData) {
+                                // Prevent saving exact duplicates consecutively
+                                let history = JSON.parse(localStorage.getItem('ebi_schedules_history') || '[]');
+                                let isDuplicate = false;
+                                if (history.length > 0) {
+                                    const last = history[0];
+                                    if (last.data.monthIndex === window.lastScheduleData.monthIndex && 
+                                        last.data.year === window.lastScheduleData.year && 
+                                        JSON.stringify(last.data.textData) === JSON.stringify(window.lastScheduleData.textData)) {
+                                        isDuplicate = true;
+                                    }
+                                }
+                                if (!isDuplicate) {
+                                    saveToHistory(window.lastScheduleData);
+                                }
+                            }
+
                             btn.innerText = "Copiado!";
                             setTimeout(() => {
                                 btn.innerText = originalText;
